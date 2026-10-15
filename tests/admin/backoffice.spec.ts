@@ -1,10 +1,7 @@
-import { test, expect } from '../../fixtures/authenticated-test';
-import { hasAuthState } from '../../utils/auth-state';
+import { expect, test } from '@playwright/test';
 
-test.skip(!hasAuthState('admin'), 'Record an admin session with npm run auth:admin to enable this check.');
-
-test('platform admin can open the back office with a recorded session @authenticated @admin', async ({ page }) => {
+test('platform admin can open the back office using a recorded session @authenticated', async ({ page }) => {
   await page.goto('/admin', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/admin(?:[/?#]|$)/);
-  await expect(page.getByRole('main')).toBeVisible();
+  await expect(page.locator('main')).toBeVisible();
 });

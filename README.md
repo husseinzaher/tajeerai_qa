@@ -1,98 +1,88 @@
 # Tajeer AI QA · Playwright
 
-An independent Playwright Test repository for Tajeer AI. It stays separate from the frontend and backend packages and is included in the main workspace at `qa/` as a Git submodule.
+Standalone, private QA repository for [Tajeer AI](https://tajeerai.com). Connect as the `qa/` Git submodule inside `husseinzaher/tajeerai_workspace`. **Do not put E2E dependencies in the frontend or backend repositories.**
 
-## Get started
+## Scope
 
-From a fresh main-workspace checkout:
+- Automated browser smoke checks for public pages and anonymous authorization gates.
+- Optional API health, authenticated merchant, and platform-admin checks.
+- Manual exploratory sessions using Playwright UI Mode, Codegen and Inspector.
+- Chromium by default; Firefox, WebKit and mobile Chromium via the cross-browser command.
+- Screenshots, video and traces on failures, with HTML / JUnit reports.
+- GitHub Actions: pushes, pull requests, daily schedule and manual dispatch against a **configured QA target**. No automatic messages, payments or writes.
 
-```bash
-git submodule update --init --recursive
-npm --prefix qa ci
-npx --prefix qa playwright install chromium
-```
+The initial tests are a **starter suite, not full feature coverage**. Extend it with seeded test accounts and read-only workflows first, then isolated, idempotent sandbox mutations. The target needs a running frontend and backend; the test repository never starts Docker or the native stack implicitly.
 
-Native development services use these defaults:
+## Prerequisites
 
-- Frontend: `http://localhost:3011`
-- Backend: `http://localhost:4040`
-
-Set `FRONTEND_URL` or `BACKEND_URL` to test another development or isolated staging environment. The values in `.env` override the defaults. `QA_BASE_URL` and `QA_API_URL` remain accepted as legacy aliases. Copy `.env.example` to `.env` to set local targets; do not commit `.env`.
-
-## Automated tests
+Node.js 22+, npm, and a running Tajeer AI environment. For native development in the parent workspace run `make run-native` (frontend :3011, backend :4040). On Ubuntu, run:
 
 ```bash
-npm --prefix qa test                 # all browser projects and test suites
-npm --prefix qa run test:smoke       # public pages, login pages, access gates, navigation, locales
-npm --prefix qa run test:auth        # authentication entry pages and optional session checks
-npm --prefix qa run test:admin       # platform-admin session check
-npm --prefix qa run test:dashboard   # merchant dashboard session check
-npm --prefix qa run test:api         # backend /api/health check
-npm --prefix qa run test:cross-browser
-npm --prefix qa run typecheck
-npm --prefix qa run report
+cp .env.example .env
+npm install
+npx playwright install --with-deps chromium
+npm run test:smoke
+npm run report
 ```
 
-The Playwright projects cover desktop Chromium, Firefox and WebKit, plus a mobile Chromium viewport. Install all browser engines before running the full suite:
+This starter distribution has no `package-lock.json` because dependencies could not be downloaded in its build environment. **Commit the generated `package-lock.json` after the first `npm install`; then switch CI to `npm ci` for reproducibility.**
+
+### Commands
 
 ```bash
-npm --prefix qa run browsers:install
+npm run test:smoke                 # 5 anonymous UI tests (no logins)
+npm run test:api                   # backend health (requires QA_API_URL)
+npm run test:ui                    # interactive browser inspection / replay
+npm run test:headed                # visible Chromium browser
+npm run test:debug                 # Playwright inspector
+npm run test:cross-browser         # Chromium + Firefox + WebKit + mobile; install all browsers first
+npm run codegen -- http://localhost:3011/login
+npm run auth:merchant              # interactive login → .auth/merchant.json
+npm run auth:admin                 # interactive login → .auth/admin.json
+npm run test:merchant              # opt-in recorded merchant session
+npm run test:admin                 # opt-in recorded platform-admin session
+npm run report                     # HTML test report
+npx playwright show-trace test-results/.../trace.zip
+npm run typecheck
 ```
 
-Smoke checks use the real frontend routes `/`, `/login`, `/admin/login`, `/dashboard`, `/admin`, `/ar` and `/en`. They do not submit login forms or change application data. The API check only reads `/api/health`.
+For cross-browser testing, run `npm run browsers:install` first. Run Codegen and auth recorder in a desktop session with a display. UI Mode is interactive (not a separate hosted application).
 
-Authenticated tests use ignored local session files in `.auth/`. They are skipped when the matching session is missing:
+Never put credentials into test files, commit `.auth/` or `.env`, or send session artifacts outside the trusted QA team. GitHub Actions runs **anonymous smoke tests only**; authenticated sessions remain local until a secure test-identity strategy is implemented.
+
+## CI target
+
+In the new GitHub QA repository, set **Settings → Secrets and variables → Actions → Variables**:
+
+- `QA_BASE_URL`: accessible staging frontend, such as `https://staging.example.com` (required to enable CI job).
+- `QA_API_URL`: accessible staging backend origin (optional; only for API checks).
+
+If `QA_BASE_URL` is unset, CI's smoke job intentionally skips. For useful scheduled checks use a stable isolated staging environment; do not target production with mutating tests. Scheduled workflow triggers depend on GitHub Actions availability and repository settings.
+
+## Publishing the submodule
+
+The GitHub connector used to prepare this scaffold can modify existing repositories but cannot create a new repository. This distribution ships a script to create a private GitHub QA repo and stage the parent submodule on your own machine, after you have installed and authenticated the [GitHub CLI](https://cli.github.com/).
+
+**Extract this ZIP outside the parent repo** (e.g. `~/Projects/tajeerai-qa`), then:
 
 ```bash
-npm --prefix qa run auth:merchant
-npm --prefix qa run auth:admin
+cd ~/Projects/tajeerai-qa
+./scripts/publish-and-link.sh ~/Projects/tajeerai/node husseinzaher/tajeerai_qa qa
+# Review the .gitmodules and QA gitlink staged in the parent before committing.
+cd ~/Projects/tajeerai/node
+git diff --cached -- .gitmodules qa
+git commit -m 'test: add Playwright QA submodule'
+git push
 ```
 
-These commands open a browser so you can sign in manually; the session files contain cookies and must never be committed or uploaded.
+`node` above is the workspace root that contains `backend/`, `frontend/` and `.gitmodules`; adjust it to your checkout. You need SSH access to the private QA repo for `git submodule add`. Later checkouts run `git submodule update --init --recursive`. This script will **refuse** to repurpose an existing remote repository or an existing `qa/` directory.
 
-## Manual exploratory testing
+To run QA from the parent root after linking: `npm --prefix qa install && npm --prefix qa run test:ui` (or `cd qa && npm run test:ui`).
 
-Playwright UI Mode lets you select tests, inspect locators, replay steps, and review traces:
+## Test design rules
 
-```bash
-npm --prefix qa run test:ui
-```
-
-For a visible browser or step-by-step Inspector session:
-
-```bash
-npm --prefix qa run test:headed
-npm --prefix qa run test:debug
-```
-
-The manual checklist and per-run template are in [`manual/`](manual/).
-
-## Codegen and reports
-
-Record interactions against the configured frontend, or pass a URL explicitly:
-
-```bash
-npm --prefix qa run codegen
-npm --prefix qa run codegen -- http://localhost:3011/login
-```
-
-Failed tests retain browser traces, screenshots and videos under `test-results/`. HTML and JUnit reports are written to `playwright-report/` and `test-results/junit.xml`:
-
-```bash
-npm --prefix qa run report
-npx --prefix qa playwright show-trace test-results/artifacts/<test>/trace.zip
-```
-
-## GitHub Actions
-
-GitHub Actions always installs the runner and browsers. When no test target is configured it runs a browser-runner check that needs no application services. To run application smoke checks, set the repository Actions variable `FRONTEND_URL`, or provide `frontend_url` when manually dispatching the workflow. The API check runs only when `BACKEND_URL` or the legacy `QA_API_URL` variable is set. Reports and failure evidence are uploaded as workflow artifacts.
-
-Use an isolated development or staging environment for configured checks. Current automated tests are read-only and do not perform production writes.
-
-## Test design
-
-- Prefer `getByRole`, `getByLabel` and `getByTestId`, with web-first assertions.
-- Test Arabic and English document direction as well as route behavior.
-- Keep merchant and platform-admin sessions separate.
-- Keep credentials and browser storage out of Git and CI artifacts.
-- Do not add destructive, payment, messaging or third-party integration flows to the smoke suite.
+- Prefer Playwright `getByRole`, `getByLabel` and stable `data-testid` selectors for feature tests. Never use brittle CSS classes or sleep-based timing.
+- Web-first assertions (`expect(...).toBeVisible`, `toHaveURL`, etc.); do not depend on fixed English content because Tajeer AI is Arabic-first/RTL.
+- Isolate fixtures by workspace; no cross-tenant access. Treat tests modifying remote services (WhatsApp, Salla, Zid, Paddle) as sandbox-only.
+- Report failures with trace and reproduction steps; sanitize recordings before sharing them.
+- Manual inventory lives in `manual/qa-checklist.md`; each release uses `manual/test-run-template.md`.

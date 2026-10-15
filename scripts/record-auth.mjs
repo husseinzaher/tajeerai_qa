@@ -10,7 +10,7 @@ if (!['merchant', 'admin'].includes(kind)) {
 }
 mkdirSync('.auth', { recursive: true, mode: 0o700 });
 const stateFile = resolve(`.auth/${kind}.json`);
-const baseUrl = process.env.FRONTEND_URL ?? process.env.QA_BASE_URL ?? 'http://localhost:3011';
+const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:3011';
 const startPath = kind === 'admin' ? '/admin/login' : '/login';
 const url = new URL(startPath, baseUrl).toString();
 console.log(`Log in manually in the opened browser, then close the codegen window to save state at ${stateFile}.`);

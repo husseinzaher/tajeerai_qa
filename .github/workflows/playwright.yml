@@ -1,0 +1,60 @@
+name: Playwright QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: Optional frontend origin for read-only smoke checks
+        required: false
+        type: string
+      backend_url:
+        description: Optional backend origin for the API health check
+        required: false
+        type: string
+  schedule:
+    - cron: '0 4 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      FRONTEND_URL: ${{ vars.FRONTEND_URL || vars.QA_BASE_URL || inputs.frontend_url || '' }}
+      BACKEND_URL: ${{ vars.BACKEND_URL || vars.QA_API_URL || inputs.backend_url || '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Run app smoke checks
+        if: ${{ env.FRONTEND_URL != '' }}
+        run: npm run test:smoke
+      - name: Run backend health check
+        if: ${{ env.BACKEND_URL != '' }}
+        run: npm run test:api
+      - name: Verify the browser runner when no app target is configured
+        if: ${{ env.FRONTEND_URL == '' }}
+        run: npm run test:framework
+      - name: Upload HTML, JUnit, and failure evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-reports
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7

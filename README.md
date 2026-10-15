@@ -81,6 +81,16 @@ To run QA from the parent root after linking: `npm --prefix qa install && npm --
 
 ## Test design rules
 
+The workspace regression suite covers 59 dashboard routes plus channel/product filters, settings navigation, marketing-plan form navigation and mobile overflow. Run it with a locally recorded merchant session:
+
+```bash
+QA_RUN_MERCHANT=1 npm test -- --project=merchant-chromium --grep @regression
+```
+
+It skips without `.auth/merchant.json`. Its API evidence retains only route/status/error code, and media capture is disabled. See [the 2026-10-16 audit](manual/2026-10-16-workspace-regression.md) for actual execution results and remaining limits.
+
+On an explicitly disposable workspace, `QA_ALLOW_DRAFT_WRITES=1 QA_RUN_MERCHANT=1 npm test -- --project=merchant-chromium --grep @draft-write` creates and edits one unpublished article. It leaves the uniquely named draft for review, never publishes it, and is disabled in CI.
+
 - Prefer Playwright `getByRole`, `getByLabel` and stable `data-testid` selectors for feature tests. Never use brittle CSS classes or sleep-based timing.
 - Web-first assertions (`expect(...).toBeVisible`, `toHaveURL`, etc.); do not depend on fixed English content because Tajeer AI is Arabic-first/RTL.
 - Isolate fixtures by workspace; no cross-tenant access. Treat tests modifying remote services (WhatsApp, Salla, Zid, Paddle) as sandbox-only.
